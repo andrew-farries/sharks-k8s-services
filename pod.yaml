@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: curl-pod
+  name: curl-pod
+spec:
+  containers:
+  - name: curl-pod
+    args:
+    - sleep
+    - "3600"
+    image: curlimages/curl
+  restartPolicy: Never

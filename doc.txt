@@ -1,0 +1,147 @@
+Kubernetes Services
+
+The goal is to learn what a Kubernetes service is by creating some web servers inside a cluster and using a service to expose them. We will look at two different kinds of service:
+
+ClusterIP
+NodePort
+
+ClusterIP services are used to expose pods to other pods inside the cluster.
+NodePort services are used to expose pods to clients outside the cluster.
+Create a ClusterIP service
+
+ClusterIP services are the default kind of service in a K8S cluster. They can expose a collection of pods to other pods inside the cluster, but they aren’t accessible from outside the cluster.
+
+Before we create a service, we need some pods for the service to expose.
+
+Use this yaml to create a replicaset of 3 simple web server pods:
+
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  labels:
+    app: simple-server
+  name: simple-server
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: simple-server
+  template:
+    metadata:
+      labels:
+        app: simple-server
+    spec:
+      containers:
+      - image: surjection/stable-server:latest
+        name: stable-server
+        ports:
+        - containerPort: 8090
+
+
+
+
+
+❓❓❓❓Check that the 3 pods are all in a Running state❓❓❓❓
+
+These pods are not exposed to the internet (pod ip addresses are internal to the cluster), so to access any of them, we need to send the HTTP request from inside the cluster.
+
+We need to create another pod inside the cluster that we can connect to and make HTTP requests from. Use this yaml to create this pod:
+
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: curl-pod
+  name: curl-pod
+spec:
+  containers:
+  - name: curl-pod
+    args:
+    - sleep
+    - "3600"
+    image: curlimages/curl
+  restartPolicy: Never
+
+
+
+
+Once the pod is in a running state, connect to it with:
+
+kubectl exec curl-pod -it -- /bin/sh
+
+
+Now that we’re inside the cluster, we can make an HTTP request to one of the web servers on port 8090.
+
+❓❓❓❓Find out the ip address of one of the web server pods❓❓❓❓
+
+curl <pod ip address>:8090
+
+
+❓❓❓❓Hit all 3 pods in the replicaset ❓❓❓❓
+
+❓❓❓❓What happens when you delete one of the pods in the replicaset? ❓❓❓❓
+
+❓❓❓❓Why is it a bad idea to reference individual pods by ip address like this?❓❓❓❓
+
+Create a service that will direct traffic to all three of the web server pods:
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: simple-server
+  name: simple-server
+spec:
+  ports:
+  - port: 8090 # This is the port on which clients connect to the service
+    protocol: TCP
+    targetPort: 8090 # This is the port to connect to on the pods
+  selector:  # Tell the service which pods to send traffic to
+    app: simple-server
+
+
+Rerun the curl command from the pod inside the cluster, but this time we can use the name of the service as the host, rather than an individual pod ip address:
+
+curl <servicename>:8090
+
+
+❓❓❓❓What happens when you run this command several times ❓❓❓❓
+
+You can check which pods the service is fronting with this command:
+
+kubectl get endpoints <servicename>
+
+
+You can also see that same information by describing the service:
+
+kubectl describe svc <servicename>
+
+
+
+The service is providing a level of indirection over the three web server pods. Clients can connect to the service, and the service load balances between the three pods:
+
+Convert the service to a NodePort service
+
+The service we just created is a ClusterIP service, which means it is only accessible from inside the Kubernetes cluster. If we want the service to be accessible from outside the cluster we have to use a NodePort service.
+
+❓❓❓❓Delete the existing service ❓❓❓❓
+
+Create a new service using this yaml:
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: simple-server
+  name: simple-server
+spec:
+  type: NodePort  # This line changes the type to NodePort
+  ports:
+  - port: 8090
+    nodePort: 30000  # This line specifies the port on the node
+    protocol: TCP
+    targetPort: 8090
+  selector:
+    app: simple-server
+
+
